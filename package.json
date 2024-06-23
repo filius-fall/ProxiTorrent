@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
-    "bencode": "^4.0.0"
+    "bencode": "^4.0.0",
+    "crypto": "^1.0.1"
   }
 }
