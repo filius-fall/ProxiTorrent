@@ -3,6 +3,7 @@ import bencode from 'bencode';
 import { type } from 'os';
 import crypto from 'crypto';
 import net from 'net';
+import { URLSearchParams } from 'url';
 
 const convertUint8ArrayToString = (obj) => {
     if (obj instanceof Uint8Array) {
@@ -44,6 +45,22 @@ const server = net.createServer(async (socket) => {
         const infoHash = crypto.createHash('sha1').update(bencodedData).digest('hex')
         const infoHashURLEncoded = encodeURIComponent(infoHash.toString('binary'))
         let pId = peerId()
+
+        const announceURL = new URL(parsedTorrent.announce)
+
+        let searchParams = {
+            'info_hash':infoHashURLEncoded,
+            'peer_id':pId,
+            'port':port,
+            'uploaded':0,
+            'downloaded':0,
+            'left':parsedTorrent.info.length,
+            'event':'started'
+        }
+
+        announceURL.search = new URLSearchParams(searchParams).toString()
+
+
     
     } catch (err) {
         console.error('Error processing torrent file:', err)
