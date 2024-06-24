@@ -4,6 +4,7 @@ import { type } from 'os';
 import crypto from 'crypto';
 import net from 'net';
 import { URLSearchParams } from 'url';
+import axios from 'axios';
 
 const convertUint8ArrayToString = (obj) => {
     if (obj instanceof Uint8Array) {
@@ -59,6 +60,13 @@ const server = net.createServer(async (socket) => {
         }
 
         announceURL.search = new URLSearchParams(searchParams).toString()
+
+        axios.get(announceURL).then(response => {
+            const peers = response.data
+            console.log("peers data:",peers)
+        }).catch(err => {
+            console.log("the error is:",err)
+        })
 
 
     
