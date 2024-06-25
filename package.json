@@ -1,0 +1,8 @@
+{
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "bencode": "^4.0.0",
+    "crypto": "^1.0.1"
+  }
+}
