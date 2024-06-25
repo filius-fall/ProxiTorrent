@@ -41,7 +41,7 @@ const torrentInfo = async () => {
     const infoDict = parsedTorrent.info
     const bencodedData = bencode.encode(infoDict)
     const infoHash = crypto.createHash('sha1').update(bencodedData).digest('hex')
-    const infoHashURLEncoded = encodeURIComponent(infoHash.toString('binary'))
+    const infoHashURLEncoded = encodeURIComponent(infoHash)
     let pId = peerId()
     const port = 6881
 
@@ -62,7 +62,6 @@ const torrentInfo = async () => {
 }
 
 
-let info = torrentInfo()
 
 const createUDPport = async () => {
     let res = await torrentInfo()
@@ -70,18 +69,41 @@ const createUDPport = async () => {
     let hostURL = res.annouceUrl
     let port = res.port
 
-    // 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
-    const connectionID = Buffer.from('0000041727101980','hex')
-    const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
-    action.writeUInt32BE(0,0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
-
-    const transactionID = crypto.randomBytes(4)
-
-    const connectionInfo = Buffet.concat([connectionID,action,transactionID])
 
     return connectionInfo
 }
 
+
+// 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
+const connectionID = Buffer.from('0000041727101980','hex')
+const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
+action.writeUInt32BE(0,0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
+
+const transactionID = crypto.randomBytes(4)
+
+const connectionInfo = Buffer.concat([connectionID,action,transactionID])
+
 const socket = dgram.createSocket('udp4')
 
-console.log(info)
+torrentInfo().then(data => {
+    let url = new URL(data.annouceUrl)
+    let port = url.port || 6881
+    socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
+        if(err){
+            console.log("sending error",err)
+            socket.close()
+        }
+        else{
+            console.log("Connection request sent")
+        }
+
+    })
+
+    socket.on('message',(response) => {
+        console.log('Message recieved',response)
+        
+    })
+})
+
+
+
