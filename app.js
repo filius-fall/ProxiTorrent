@@ -87,6 +87,29 @@ const connectionInfo = Buffer.concat([connectionID,action,transactionID])
 
 const socket = dgram.createSocket('udp4')
 
+const sendConnectionRequest = (url, port, retryCount = 0) => {
+    if (retryCount >= 5) {
+        console.error(`Failed to resolve ${url.hostname} after 5 attempts.`);
+        return;
+    }
+
+    socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
+        if (err) {
+            if (err.code === 'ENOTFOUND') {
+                console.error(`DNS resolution failed for hostname: ${url.hostname}, retrying...`);
+                setTimeout(() => sendConnectionRequest(url, port, retryCount + 1), 1000);
+            } else {
+                console.error("Sending error:", err);
+            }
+        } else {
+            console.log("Connection request sent to", url.hostname, "on port", port);
+        }
+    });
+
+    socket.on('message', (response) => {
+        console.log('Message received', response);
+    });
+};
 torrentInfo().then(data => {
     
     const announceUrls = data.announceUrls
@@ -97,23 +120,9 @@ torrentInfo().then(data => {
             let port = url.port || 6881
 
             
-            socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
-                if (err) {
-                    if (err.code === 'ENOTFOUND') {
-                        console.error(`DNS resolution failed for hostname: ${url.hostname}`);
-                    } else {
-                        console.error("Sending error:", err);
-                    }
-                } else {
-                    console.log("Connection request sent to", hostname, "on port", port);
-                }
+            sendConnectionRequest(url,port)
         
-            })
-        
-            socket.on('message',(response) => {
-                console.log('Message recieved',response)
-                
-            })
+            
         }
         catch(err){
             console.error(`error connecting to tracker ${tracker}`,err.message)
