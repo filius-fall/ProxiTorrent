@@ -6,6 +6,8 @@ import net from 'net';
 import { URLSearchParams } from 'url';
 import axios from 'axios';
 
+import dgram from 'dgram'
+
 const convertUint8ArrayToString = (obj) => {
     if (obj instanceof Uint8Array) {
         return new TextDecoder().decode(obj);
@@ -34,47 +36,52 @@ const peerId = () => {
     return clientPrefix + randomBytes
 }
 
+const torrentInfo = async () => {
+    const parsedTorrent = await ProccessedTorrentFile()
+    const infoDict = parsedTorrent.info
+    const bencodedData = bencode.encode(infoDict)
+    const infoHash = crypto.createHash('sha1').update(bencodedData).digest('hex')
+    const infoHashURLEncoded = encodeURIComponent(infoHash.toString('binary'))
+    let pId = peerId()
+    const port = 6881
 
+    const announceURL = parsedTorrent.announce
 
-const port = 6881 // standard BitTorrent Port
-const server = net.createServer(async (socket) => {
-    
-    try {
-        const parsedTorrent = await ProccessedTorrentFile()
-        const infoDict = parsedTorrent.info
-        const bencodedData = bencode.encode(infoDict)
-        const infoHash = crypto.createHash('sha1').update(bencodedData).digest('hex')
-        const infoHashURLEncoded = encodeURIComponent(infoHash.toString('binary'))
-        let pId = peerId()
-
-        const announceURL = new URL(parsedTorrent.announce)
-
-        let searchParams = {
-            'info_hash':infoHashURLEncoded,
-            'peer_id':pId,
-            'port':port,
-            'uploaded':0,
-            'downloaded':0,
-            'left':parsedTorrent.info.length,
-            'event':'started'
-        }
-
-        announceURL.search = new URLSearchParams(searchParams).toString()
-
-        axios.get(announceURL).then(response => {
-            const peers = response.data
-            console.log("peers data:",peers)
-        }).catch(err => {
-            console.log("the error is:",err)
-        })
-
-
-    
-    } catch (err) {
-        console.error('Error processing torrent file:', err)
+    let response = {
+        'annouceUrl':announceURL,
+        'info_hash':infoHashURLEncoded,
+        'peer_id':pId,
+        'port':port,
+        'uploaded':0,
+        'downloaded':0,
+        'left':parsedTorrent.info.length,
+        'event':'started'
     }
-})
 
-server.listen(port, () => {
-    console.log('Server started')
-})
+    return response
+}
+
+
+let info = torrentInfo()
+
+const createUDPport = async () => {
+    let res = await torrentInfo()
+
+    let hostURL = res.annouceUrl
+    let port = res.port
+
+    // 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
+    const connectionID = Buffer.from('0000041727101980','hex')
+    const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
+    action.writeUInt32BE(0,0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
+
+    const transactionID = crypto.randomBytes(4)
+
+    const connectionInfo = Buffet.concat([connectionID,action,transactionID])
+
+    return connectionInfo
+}
+
+const socket = dgram.createSocket('udp4')
+
+console.log(info)
