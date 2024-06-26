@@ -21,7 +21,7 @@ const convertUint8ArrayToString = (obj) => {
     return obj;
 };
 const ProccessedTorrentFile = async () => {
-    let data = await fs.readFile('file.torrent')
+    let data = await fs.readFile('first_file.torrent')
     let jsonData = bencode.decode(data)
     let parsedTorrent = convertUint8ArrayToString(jsonData)
 
@@ -88,8 +88,8 @@ const connectionInfo = Buffer.concat([connectionID,action,transactionID])
 const socket = dgram.createSocket('udp4')
 
 const sendConnectionRequest = (url, port, retryCount = 0) => {
-    if (retryCount >= 5) {
-        console.error(`Failed to resolve ${url.hostname} after 5 attempts.`);
+    if (retryCount >= 15) {
+        console.error(`Failed to resolve ${url.hostname} after 15 attempts.`);
         return;
     }
 
@@ -131,7 +131,7 @@ torrentInfo().then(data => {
     
 }).finally(() => {
     console.log("closing Finally")
-    socket.close()
+    // socket.close()
 })
 
 
