@@ -108,6 +108,20 @@ const sendConnectionRequest = (url, port, retryCount = 0) => {
 
     socket.on('message', (response) => {
         console.log('Message received', response);
+        const byteArray = Buffer.from(response, 'hex');
+
+        // Extract parts
+        const action = byteArray.readUInt32BE(0);
+        const transactionId = byteArray.readUInt32BE(4);
+        const connectionIdHigh = byteArray.readUInt32BE(8);
+        const connectionIdLow = byteArray.readUInt32BE(12);
+        
+        // Combine the high and low parts to form the 64-bit connection ID
+        const connectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
+        
+        console.log('Action:', action);
+        console.log('Transaction ID:', transactionId);
+        console.log('Connection ID:', connectionId.toString());
     });
 };
 torrentInfo().then(data => {
