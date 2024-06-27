@@ -21,7 +21,7 @@ const convertUint8ArrayToString = (obj) => {
     return obj;
 };
 const ProccessedTorrentFile = async () => {
-    let data = await fs.readFile('file.torrent')
+    let data = await fs.readFile('first_file.torrent')
     let jsonData = bencode.decode(data)
     let parsedTorrent = convertUint8ArrayToString(jsonData)
 
@@ -87,6 +87,43 @@ const connectionInfo = Buffer.concat([connectionID,action,transactionID])
 
 const socket = dgram.createSocket('udp4')
 
+const sendConnectionRequest = (url, port, retryCount = 0) => {
+    if (retryCount >= 15) {
+        console.error(`Failed to resolve ${url.hostname} after 15 attempts.`);
+        return;
+    }
+
+    socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
+        if (err) {
+            if (err.code === 'ENOTFOUND') {
+                console.error(`DNS resolution failed for hostname: ${url.hostname}, retrying...`);
+                setTimeout(() => sendConnectionRequest(url, port, retryCount + 1), 1000);
+            } else {
+                console.error("Sending error:", err);
+            }
+        } else {
+            console.log("Connection request sent to", url.hostname, "on port", port);
+        }
+    });
+
+    socket.on('message', (response) => {
+        console.log('Message received', response);
+        const byteArray = Buffer.from(response, 'hex');
+
+        // Extract parts
+        const action = byteArray.readUInt32BE(0);
+        const transactionId = byteArray.readUInt32BE(4);
+        const connectionIdHigh = byteArray.readUInt32BE(8);
+        const connectionIdLow = byteArray.readUInt32BE(12);
+        
+        // Combine the high and low parts to form the 64-bit connection ID
+        const connectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
+        
+        console.log('Action:', action);
+        console.log('Transaction ID:', transactionId);
+        console.log('Connection ID:', connectionId.toString());
+    });
+};
 torrentInfo().then(data => {
     
     const announceUrls = data.announceUrls
@@ -97,23 +134,9 @@ torrentInfo().then(data => {
             let port = url.port || 6881
 
             
-            socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
-                if (err) {
-                    if (err.code === 'ENOTFOUND') {
-                        console.error(`DNS resolution failed for hostname: ${url.hostname}`);
-                    } else {
-                        console.error("Sending error:", err);
-                    }
-                } else {
-                    console.log("Connection request sent to", hostname, "on port", port);
-                }
+            sendConnectionRequest(url,port)
         
-            })
-        
-            socket.on('message',(response) => {
-                console.log('Message recieved',response)
-                
-            })
+            
         }
         catch(err){
             console.error(`error connecting to tracker ${tracker}`,err.message)
@@ -122,7 +145,7 @@ torrentInfo().then(data => {
     
 }).finally(() => {
     console.log("closing Finally")
-    socket.close()
+    // socket.close()
 })
 
 
