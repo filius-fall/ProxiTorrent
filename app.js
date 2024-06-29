@@ -96,7 +96,6 @@ const sendConnectionRequest = (url, port, retryCount = 0) => {
     socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
         if (err) {
             if (err.code === 'ENOTFOUND') {
-                console.error(`DNS resolution failed for hostname: ${url.hostname}, retrying...`);
                 setTimeout(() => sendConnectionRequest(url, port, retryCount + 1), 1000);
             } else {
                 console.error("Sending error:", err);
@@ -107,7 +106,6 @@ const sendConnectionRequest = (url, port, retryCount = 0) => {
     });
 
     socket.on('message', (response) => {
-        console.log('Message received', response);
         const byteArray = Buffer.from(response, 'hex');
 
         // Extract parts
