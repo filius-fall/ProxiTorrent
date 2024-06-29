@@ -75,52 +75,62 @@ const createUDPport = async () => {
     return connectionInfo
 }
 
+const createConnectionRequest = (transactionID) => {
 
-// 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
-const connectionID = Buffer.from('0000041727101980','hex')
-const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
-action.writeUInt32BE(0,0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
+    // 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
+    const connectionID = Buffer.from('0000041727101980','hex')
+    const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
+    action.writeUInt32BE(0,0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
 
-const transactionID = crypto.randomBytes(4)
 
-const connectionInfo = Buffer.concat([connectionID,action,transactionID])
+    return Buffer.concat([connectionID,action,transactionID])
+}
+
+const PendingConnectionsRequests = {}
+const ConnectedTrackersList = {}
 
 const socket = dgram.createSocket('udp4')
 
-const sendConnectionRequest = (url, port, retryCount = 0) => {
-    if (retryCount >= 15) {
-        console.error(`Failed to resolve ${url.hostname} after 15 attempts.`);
-        return;
-    }
+const sendConnectionRequest = (trackerURL, port, retryCount = 0) => {
 
-    socket.send(connectionInfo, 0, connectionInfo.length, port, url.hostname, (err) => {
+    const transactionID = crypto.randomBytes(4)
+    const connectionRequest = createConnectionRequest(transactionID)
+
+    socket.send(connectionRequest, 0, connectionRequest.length, port, trackerURL.hostname, (err) => {
         if (err) {
-            if (err.code === 'ENOTFOUND') {
-                setTimeout(() => sendConnectionRequest(url, port, retryCount + 1), 1000);
+            if (err.code === 'ENOTFOUND' && retryCount <= 15) {
+                setTimeout(() => sendConnectionRequest(trackerURL, port, retryCount + 1), 1000);
             } else {
                 console.error("Sending error:", err);
             }
         } else {
-            console.log("Connection request sent to", url.hostname, "on port", port);
+            console.log("Connection request sent to", trackerURL.hostname, "on port", port);
+            PendingConnectionsRequests[transactionID.toString('hex')] = trackerURL
         }
     });
 
-    socket.on('message', (response) => {
-        const byteArray = Buffer.from(response, 'hex');
+socket.on('message', (response) => {
+    const byteArray = Buffer.from(response, 'hex');
 
-        // Extract parts
-        const action = byteArray.readUInt32BE(0);
-        const transactionId = byteArray.readUInt32BE(4);
-        const connectionIdHigh = byteArray.readUInt32BE(8);
-        const connectionIdLow = byteArray.readUInt32BE(12);
-        
-        // Combine the high and low parts to form the 64-bit connection ID
-        const connectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
-        
-        console.log('Action:', action);
-        console.log('Transaction ID:', transactionId);
-        console.log('Connection ID:', connectionId.toString());
-    });
+    // Extract parts
+    const action = byteArray.readUInt32BE(0);
+    const respTransactionId = response.toString('hex',4,8);// This uses Buffer.toString('encoding',start,end) method
+    const connectionIdHigh = byteArray.readUInt32BE(8);
+    const connectionIdLow = byteArray.readUInt32BE(12);
+    
+    // Combine the high and low parts to form the 64-bit connection ID
+    const responseConnectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
+    
+    if(PendingConnectionsRequests[respTransactionId]){
+        const tracker = PendingConnectionsRequests[respTransactionId]
+        tracker.connectionID = responseConnectionId
+        console.log(`Recieved ConenctionID for ${tracker.hostname}: ${responseConnectionId}`)
+        ConnectedTrackersList[tracker.hostname] = responseConnectionId
+        delete PendingConnectionsRequests[respTransactionId]
+    }
+
+    console.log("Connected Tracker list",ConnectedTrackersList)
+});
 };
 torrentInfo().then(data => {
     
