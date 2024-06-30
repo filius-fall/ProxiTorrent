@@ -8,6 +8,9 @@ import axios from 'axios';
 
 import dgram from 'dgram'
 
+
+import EventEmitter from 'events';
+
 const convertUint8ArrayToString = (obj) => {
     if (obj instanceof Uint8Array) {
         return new TextDecoder().decode(obj);
@@ -87,7 +90,40 @@ const createConnectionRequest = (transactionID) => {
 }
 
 const PendingConnectionsRequests = {}
-const ConnectedTrackersList = {}
+
+class TrackerData extends EventEmitter{
+    constructor(){
+        super()
+        this.tracker = new Proxy({},this.createHandler())
+    }
+
+    createHandler(){
+        return {
+            set:(target,key,value) => {
+                let isTargetExists = !target.hasOwnProperty(key)
+                if(isTargetExists){
+                    target[key] = value
+                    this.emit('trackerAdded',key,value)
+                }
+                return true
+            }
+        }
+    }
+
+    addTracker(key,value) {
+        this.tracker[key] = value
+    }
+
+    getTracker(){
+        return this.tracker
+    }
+
+}
+
+const ConnectedTrackersList = new TrackerData()
+
+
+
 
 const socket = dgram.createSocket('udp4')
 
@@ -109,6 +145,46 @@ const sendConnectionRequest = (trackerURL, port, retryCount = 0) => {
         }
     });
 
+const createAnnouceRequest = (connectionID, transactionID, infoHash, peerId, left) => {
+    let action = Buffer.alloc(4)
+    action.writeUInt32BE(1,0)
+    
+    const Download = Buffer.alloc(8)
+    Download.writeBigInt64BE(On,0)
+
+    const leftBuffer = Buffer.alloc(8)
+    leftBuffer.writeBigInt64BE(BigInt(left),0)
+
+    const Uploaded = Buffer.alloc(8)
+    Uploaded.writeBigInt64BE(0,0)
+
+    const ip = Buffer.alloc(4)
+    ip.writeUInt32BE(0,0)
+
+    const event = Buffer.alloc(4)
+    event.writeUInt32BE(0,0)
+
+    const wantedPeers = Buffer.alloc(4)
+    wantedPeers.writeInt32BE(-1,0)
+
+    const key = crypto.randomBytes(4)
+
+    return Buffer.concat([
+        connectionID,
+        action,
+        transactionID,
+        Buffer.from(infoHash,'hex'),
+        Buffer.from(peerId),
+        Download,
+        Uploaded,
+        event,
+        ip,
+        key,
+        wantedPeers
+
+    ])
+}
+
 socket.on('message', (response) => {
     const byteArray = Buffer.from(response, 'hex');
 
@@ -125,11 +201,11 @@ socket.on('message', (response) => {
         const tracker = PendingConnectionsRequests[respTransactionId]
         tracker.connectionID = responseConnectionId
         console.log(`Recieved ConenctionID for ${tracker.hostname}: ${responseConnectionId}`)
-        ConnectedTrackersList[tracker.hostname] = responseConnectionId
+        ConnectedTrackersList.addTracker(tracker.hostname,{'connectionid':responseConnectionId,'transcationid':respTransactionId,'port':tracker.port})
         delete PendingConnectionsRequests[respTransactionId]
     }
 
-    console.log("Connected Tracker list",ConnectedTrackersList)
+    console.log("Connected Tracker list",ConnectedTrackersList.getTracker())
 });
 };
 torrentInfo().then(data => {
@@ -143,6 +219,11 @@ torrentInfo().then(data => {
 
             
             sendConnectionRequest(url,port)
+
+            ConnectedTrackersList.on('trackerAdded',(key,value) => {
+                console.log(`New Tracker has been added to the list ${key}`)
+                console.log(`New tracker post number is ${value.port}`)
+            })
         
             
         }
