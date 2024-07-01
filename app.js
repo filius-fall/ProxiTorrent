@@ -144,6 +144,7 @@ const sendConnectionRequest = (trackerURL, port, retryCount = 0) => {
             PendingConnectionsRequests[transactionID.toString('hex')] = trackerURL
         }
     });
+    
 
 const createAnnouceRequest = (connectionID, transactionID, infoHash, peerId, left) => {
     let action = Buffer.alloc(4)
