@@ -66,18 +66,6 @@ const torrentInfo = async () => {
     return response
 }
 
-
-
-const createUDPport = async () => {
-    let res = await torrentInfo()
-
-    let hostURL = res.annouceUrl
-    let port = res.port
-
-
-    return connectionInfo
-}
-
 const createConnectionRequest = (transactionID) => {
 
     // 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
@@ -188,7 +176,6 @@ const createAnnouceRequest = (connectionID, transactionID, infoHash, peerId, lef
 
 socket.on('message', (response) => {
     const byteArray = Buffer.from(response, 'hex');
-
     // Extract parts
     const action = byteArray.readUInt32BE(0);
     const respTransactionId = response.toString('hex',4,8);// This uses Buffer.toString('encoding',start,end) method
