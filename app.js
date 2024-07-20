@@ -74,8 +74,8 @@
             portBuffer
         ]);
     
-        console.log(`Request Buffer Length: ${requestBuffer.length}`); // Should be 98
-        console.log(`Request Buffer Content: ${requestBuffer.toString('hex')}`);
+        // console.log(`Request Buffer Length: ${requestBuffer.length}`); // Should be 98
+        // console.log(`Request Buffer Content: ${requestBuffer.toString('hex')}`);
             
         return requestBuffer;
     };
@@ -199,12 +199,12 @@
                     console.error("Sending error:", err);
                 }
             } else {
-                console.log("Connection request sent to", trackerURL.hostname, "on port", port);
+                //console.log("Connection request sent to", trackerURL.hostname, "on port", port);
                 PendingConnectionsRequests[transactionID.toString('hex')] = trackerURL
             }
 
             if(retryCount > 15){
-                console.log("More than 15 retriessssssssssssss")
+                //console.log("More than 15 retriessssssssssssss")
                 socket.close()
             }
         });
@@ -226,7 +226,7 @@
         if(PendingConnectionsRequests[respTransactionId]){
             const tracker = PendingConnectionsRequests[respTransactionId]
             tracker.connectionID = responseConnectionId
-            console.log(`Recieved ConenctionID for ${tracker.hostname}: ${responseConnectionId}`)
+            // console.log(`Recieved ConenctionID for ${tracker.hostname}: ${responseConnectionId}`)
             ConnectedTrackersList.addTracker(tracker.hostname,{'connectionid':responseConnectionId,'transcationid':respTransactionId,'port':tracker.port})
             delete PendingConnectionsRequests[respTransactionId]
         }
@@ -235,49 +235,29 @@
     });
     };
 
-    const dummy_tracker_data = {
-        'tracker.internetwarriors.net': {
-          connectionid: 12166777240692464727n,
-          transcationid: 'bf19bfbb',
-          port: '1337'
-        },
-        'tracker.opentrackr.org': {
-          connectionid: 17977800229363310647n,
-          transcationid: '3148651c',
-          port: '1337'
-        },
-        'glotorrents.pw': {
-          connectionid: 7391781883746451452n,
-          transcationid: '24f63849',
-          port: '6969'
-        },
-        'tracker.torrent.eu.org': {
-          connectionid: 17936456095237353297n,
-          transcationid: '75b74be3',
-          port: '451'
-        },
-        'tracker.vanitycore.co': {
-          connectionid: 7391781884918838758n,
-          transcationid: 'fbda6e13',
-          port: '6969'
-        },
-        'open.stealth.si': {
-          connectionid: 11316125973778116976n,
-          transcationid: '372f79f9',
-          port: '80'
-        },
-        'tracker.tiny-vps.com': {
-          connectionid: 13325772358578447761n,
-          transcationid: '6870233f',
-          port: '6969'
-        }
-      }
+
+    // Event listener for incoming messages
+socket.on('message', (msg, rinfo) => {
+    console.log(`Received message from ${rinfo.address}:${rinfo.port}`);
+    console.log('Message:', msg.toString('hex')); // or use msg.toString('hex') if binary data
+});
+
+// Event listener for errors
+socket.on('error', (err) => {
+    console.error('Socket error:', err);
+    socket.close(); // Close the socket on error
+});
+
+// Event listener for the socket being closed
+socket.on('close', () => {
+    console.log('Socket closed');
+});
     
 // Function to handle peer list connection
 const createPeerListConnection = (trackerList, infoHash, peerID, left) => {
     for (const [trackerUrl, data] of Object.entries(trackerList)) {
-        console.log('Tracker URL:', trackerUrl);
-        console.log('Tracker Data:', data);
+        // console.log('Tracker URL:', trackerUrl);
+        //console.log('Tracker Data:', data);
 
         const port = parseInt(data.port, 10) || 6881;
         const connectionId = data.connectionid;
@@ -288,19 +268,17 @@ const createPeerListConnection = (trackerList, infoHash, peerID, left) => {
         // Construct a valid URL
         const fullUrl = `http://${hostname}:${trackerPort}`;
 
-        console.log('Full URL:', fullUrl);
-        console.log('Input Parameters:', connectionId, transactionID, infoHash, peerID, left);
+        // console.log('Full URL:', fullUrl);
+        // console.log('Input Parameters:', connectionId, transactionID, infoHash, peerID, left);
 
         const announceRequest = createAnnounceRequest(connectionId, transactionID, infoHash, peerID, left);
 
-        console.log("Announce Request Length:", announceRequest.length);
+        // console.log("Announce Request Length:", announceRequest.length);
 
         try {
             socket.send(announceRequest, 0, announceRequest.length, trackerPort, hostname, (err) => {
                 if (err) {
                     console.error(`Couldn't send request to tracker ${fullUrl}:`, err.message);
-                } else {
-                    console.log("Sent the request to tracker URL regarding the peer.");
                 }
             });
         } catch (err) {
@@ -308,37 +286,6 @@ const createPeerListConnection = (trackerList, infoHash, peerID, left) => {
         }
     }
 };
-
-// Example usage
-torrentInfo().then(data => {
-    const announceUrls = data.announceUrls;
-
-    for (const tracker of announceUrls) {
-        try {
-            // Ensure tracker URL includes the protocol and port if necessary
-            let url;
-            if (!tracker.startsWith('http://') && !tracker.startsWith('https://')) {
-                url = new URL(`http://${tracker}`);
-            } else {
-                url = new URL(tracker);
-            }
-            const port = url.port || 6881;
-
-            sendConnectionRequest(url, port);
-
-            ConnectedTrackersList.on('trackerAdded', (key, value) => {
-                console.log('Added Tracker:', ConnectedTrackersList);
-                const trackerList = ConnectedTrackersList.getTracker();
-                createPeerListConnection(trackerList, data.info_hash, data.peer_id, data.left);
-            });
-        } catch (err) {
-            console.error(`Error connecting to tracker ${tracker}:`, err.message);
-        }
-    }
-}).finally(() => {
-    console.log("Closing finally.");
-    // socket.close();
-});
 
 
 socket.setMaxListeners(20); // Adjust the number as needed
@@ -358,7 +305,7 @@ torrentInfo().then(data => {
             sendConnectionRequest(url, port);
 
             ConnectedTrackersList.on('trackerAdded', (key, value) => {
-                console.log('Added Tracker:', ConnectedTrackersList);
+                // console.log('Added Tracker:', ConnectedTrackersList);
                 const trackerList = ConnectedTrackersList.getTracker();
                 createPeerListConnection(trackerList, data.info_hash, data.peer_id, data.left);
             });
@@ -366,7 +313,11 @@ torrentInfo().then(data => {
             console.error(`Error connecting to tracker ${tracker}:`, err.message);
         }
     }
+
+    
 }).finally(() => {
     console.log("Closing finally.");
     // socket.close();
 });
+
+
