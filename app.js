@@ -5,59 +5,48 @@ import crypto from 'crypto';
 import net from 'net';
 import { URLSearchParams, URL } from 'url';
 import axios from 'axios';
-
 import dgram from 'dgram'
-
-
 import EventEmitter from 'events';
-
-
-
 const createAnnounceRequest = (connectionID, transactionID, infoHash, peerIdBuffer, left) => {
-    if (!connectionID || !transactionID || !infoHash || !peerIdBuffer || left === undefined) {
-        throw new Error('Missing required parameters');
+    if (!connectionID) {
+        throw new Error('Missing required parameter: connectionID');
     }
-
-    // Construction of buffers
+    if (!transactionID) {
+        throw new Error('Missing required parameter: transactionID');
+    }
+    if (!infoHash) {
+        throw new Error('Missing required parameter: infoHash');
+    }
+    if (!peerIdBuffer) {
+        throw new Error('Missing required parameter: peerIdBuffer');
+    }
+    if (left === undefined) {
+        throw new Error('Missing required parameter: left');
+    }
     const connectionIDBuffer = Buffer.alloc(8);
     connectionIDBuffer.writeBigUInt64BE(BigInt(connectionID), 0);
-
     const actionBuffer = Buffer.alloc(4);
     actionBuffer.writeUInt32BE(1, 0);
-
-    const transactionIDBuffer = Buffer.from(transactionID, 'hex'); // 4 bytes
-
-    const infoHashBuffer = Buffer.from(infoHash, 'hex'); // 20 bytes
-
-    // Ensure peerIdBuffer is 20 bytes
+    const transactionIDBuffer = Buffer.from(transactionID, 'hex'); 
+    const infoHashBuffer = Buffer.from(infoHash, 'hex'); 
     if (peerIdBuffer.length !== 20) {
         throw new Error('Invalid peer ID length');
     }
-
     const downloadedBuffer = Buffer.alloc(8);
     downloadedBuffer.writeBigUInt64BE(BigInt(0), 0);
-
     const leftBuffer = Buffer.alloc(8);
     leftBuffer.writeBigUInt64BE(BigInt(left), 0);
-
     const uploadedBuffer = Buffer.alloc(8);
     uploadedBuffer.writeBigUInt64BE(BigInt(0), 0);
-
     const eventBuffer = Buffer.alloc(4);
     eventBuffer.writeUInt32BE(0, 0);
-
     const ipBuffer = Buffer.alloc(4);
     ipBuffer.writeUInt32BE(0, 0);
-
-    const keyBuffer = crypto.randomBytes(4); // 4 bytes
-
+    const keyBuffer = crypto.randomBytes(4); 
     const numWantBuffer = Buffer.alloc(4);
     numWantBuffer.writeInt32BE(-1, 0);
-
     const portBuffer = Buffer.alloc(2);
-    portBuffer.writeUInt16BE(1337, 0); // 2 bytes
-
-    // Concatenate all buffers
+    portBuffer.writeUInt16BE(1337, 0); 
     const requestBuffer = Buffer.concat([
         connectionIDBuffer,
         actionBuffer,
@@ -73,15 +62,8 @@ const createAnnounceRequest = (connectionID, transactionID, infoHash, peerIdBuff
         numWantBuffer,
         portBuffer
     ]);
-
-    // console.log(`Request Buffer Length: ${requestBuffer.length}`); // Should be 98
-    // console.log(`Request Buffer Content: ${requestBuffer.toString('hex')}`);
-
     return requestBuffer;
 };
-
-
-
 const convertUint8ArrayToString = (obj) => {
     if (obj instanceof Uint8Array) {
         return new TextDecoder().decode(obj);
@@ -95,18 +77,34 @@ const convertUint8ArrayToString = (obj) => {
     return obj;
 };
 const ProccessedTorrentFile = async () => {
-    let data = await fs.readFile('first_file.torrent')
+    let data = await fs.readFile('torrent_file.torrent')
     let jsonData = bencode.decode(data)
     let parsedTorrent = convertUint8ArrayToString(jsonData)
-
+    console.log("Parsed Data is: ",parsedTorrent)
     return parsedTorrent
-
+}
+const peerId = () => {
+    const clientPrefix = Buffer.from('-FC1000-', 'utf-8'); 
+    const randomBytes = crypto.randomBytes(12); 
+    return Buffer.concat([clientPrefix, randomBytes]); 
 }
 
-const peerId = () => {
-    const clientPrefix = Buffer.from('-FC1000-', 'utf-8'); // 8 bytes
-    const randomBytes = crypto.randomBytes(12); // 12 bytes
-    return Buffer.concat([clientPrefix, randomBytes]); // 20 bytes in total
+const total_length = (info) => {
+
+    if("length" in info){
+        return info['length']
+    }
+    else if("files" in info){
+        let total_length = 0
+        for(let i of info['files']){
+            
+            total_length += i['length']
+        }
+        return total_length
+    }
+    else{
+        throw new Error("Invalid torrent file structure")
+    }
 }
 
 const torrentInfo = async () => {
@@ -117,11 +115,9 @@ const torrentInfo = async () => {
     const infoHashURLEncoded = encodeURIComponent(infoHash)
     let pId = peerId()
     const port = 6881
-
     const annouceUrls = parsedTorrent['announce-list'].flat()
-
     const announceURL = parsedTorrent.announce
-
+    let left_size = total_length(infoDict)
     let response = {
         'annouceUrl': announceURL,
         'info_hash': infoHashURLEncoded,
@@ -129,33 +125,25 @@ const torrentInfo = async () => {
         'port': port,
         'uploaded': 0,
         'downloaded': 0,
-        'left': parsedTorrent.info.length,
+        'left': left_size,
         'event': 'started',
-        'announceUrls': annouceUrls
+        'announceUrls': annouceUrls,
+        'infoDict':infoDict
     }
-
     return response
 }
-
 const createConnectionRequest = (transactionID) => {
-
-    // 0000041727101980 is a standard connection ID of UDP protocol for BitTorrent connection
     const connectionID = Buffer.from('0000041727101980', 'hex')
-    const action = Buffer.alloc(4)  // This create 32 bit or 4 Bytes buffer for action
-    action.writeUInt32BE(0, 0)  // writeUInt32BE(data,offset) data = data to be added, offset= by what offset data to be added
-
-
+    const action = Buffer.alloc(4)  
+    action.writeUInt32BE(0, 0)  
     return Buffer.concat([connectionID, action, transactionID])
 }
-
 const PendingConnectionsRequests = {}
-
 class TrackerData extends EventEmitter {
     constructor() {
         super()
         this.tracker = new Proxy({}, this.createHandler())
     }
-
     createHandler() {
         return {
             set: (target, key, value) => {
@@ -168,154 +156,112 @@ class TrackerData extends EventEmitter {
             }
         }
     }
-
     addTracker(key, value) {
         this.tracker[key] = value
     }
-
     getTracker() {
         return this.tracker
     }
-
 }
-
 const ConnectedTrackersList = new TrackerData()
-
-
-
-
 const socket = dgram.createSocket('udp4')
-
 const sendConnectionRequest = (trackerURL, port, retryCount = 0) => {
-
     const transactionID = crypto.randomBytes(4)
     const connectionRequest = createConnectionRequest(transactionID)
-
     socket.send(connectionRequest, 0, connectionRequest.length, port, trackerURL.hostname, (err) => {
         if (err) {
-            if (err.code === 'ENOTFOUND' && retryCount <= 15) {
+            if (err.code === 'ENOTFOUND') {
                 setTimeout(() => sendConnectionRequest(trackerURL, port, retryCount + 1), 1000);
             } else {
                 console.error("Sending error:", err);
             }
         } else {
-            //console.log("Connection request sent to", trackerURL.hostname, "on port", port);
             PendingConnectionsRequests[transactionID.toString('hex')] = trackerURL
         }
-
-        if (retryCount > 15) {
-            //console.log("More than 15 retriessssssssssssss")
-            socket.close()
-        }
-    });
-
-
-
-
-    socket.on('message', (response) => {
-        const byteArray = Buffer.from(response, 'hex');
-        // Extract parts
-        const action = byteArray.readUInt32BE(0);
-        const respTransactionId = response.toString('hex', 4, 8);// This uses Buffer.toString('encoding',start,end) method
-        const connectionIdHigh = byteArray.readUInt32BE(8);
-        const connectionIdLow = byteArray.readUInt32BE(12);
-
-        // Combine the high and low parts to form the 64-bit connection ID
-        const responseConnectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
-
-        if (PendingConnectionsRequests[respTransactionId]) {
-            const tracker = PendingConnectionsRequests[respTransactionId]
-            tracker.connectionID = responseConnectionId
-            // console.log(`Recieved ConenctionID for ${tracker.hostname}: ${responseConnectionId}`)
-            ConnectedTrackersList.addTracker(tracker.hostname, { 'connectionid': responseConnectionId, 'transcationid': respTransactionId, 'port': tracker.port })
-            delete PendingConnectionsRequests[respTransactionId]
-        }
-
-        // console.log("Connected Tracker list",ConnectedTrackersList.getTracker())
     });
 };
-
-
-// Event listener for incoming messages
-socket.on('message', (msg, rinfo) => {
-    console.log(`Received message from ${rinfo.address}:${rinfo.port}`);
-    console.log('Message:', msg.toString('hex')); // or use msg.toString('hex') if binary data
+socket.on('message', (response, rinfo) => {
+    // console.log(`Received message from ${rinfo.address}:${rinfo.port}`);
+    // console.log('Message:', response.toString('hex'));
+    const byteArray = Buffer.from(response, 'hex');
+    const action = byteArray.readUInt32BE(0);
+    if (action === 0) {
+        const respTransactionId = response.toString('hex', 4, 8);
+        const connectionIdHigh = byteArray.readUInt32BE(8);
+        const connectionIdLow = byteArray.readUInt32BE(12);
+        const responseConnectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
+        console.log(respTransactionId,"This is transcationID  ", byteArray, "this is Bytearray")
+        if (PendingConnectionsRequests[respTransactionId]) {
+            const tracker = PendingConnectionsRequests[respTransactionId];
+            tracker.connectionID = responseConnectionId;
+            ConnectedTrackersList.addTracker(tracker.hostname, {
+                'connectionid': responseConnectionId,
+                'transcationid': respTransactionId,
+                'port': tracker.port
+            });
+            delete PendingConnectionsRequests[respTransactionId];
+        }
+    } 
+    else if (action === 1) {
+        const interval = response.readUInt32BE(8);
+        const leechers = response.readUInt32BE(12);
+        const seeders = response.readUInt32BE(16);
+        // console.log(`Announce response: interval=${interval}, leechers=${leechers}, seeders=${seeders}`);
+        const peers = [];
+        for (let i = 20; i < response.length; i += 6) {
+            const ip = `${response[i]}.${response[i + 1]}.${response[i + 2]}.${response[i + 3]}`;
+            const port = response.readUInt16BE(i + 4);
+            peers.push({ ip, port });
+        }
+        // console.log('Peers are:', peers);
+    }else {
+        // console.log(`Unknown action type: ${action}`);
+    }
 });
-
-// Event listener for errors
 socket.on('error', (err) => {
     console.error('Socket error:', err);
-    socket.close(); // Close the socket on error
+    socket.close(); 
 });
-
-// Event listener for the socket being closed
 socket.on('close', () => {
     console.log('Socket closed');
 });
-
-// Function to handle peer list connection
 const createPeerListConnection = (trackerList, infoHash, peerID, left) => {
     for (const [trackerUrl, data] of Object.entries(trackerList)) {
-        // console.log('Tracker URL:', trackerUrl);
-        //console.log('Tracker Data:', data);
-
         const port = parseInt(data.port, 10) || 6881;
         const connectionId = data.connectionid;
         const transactionID = Buffer.from(data.transcationid, 'hex');
         const hostname = trackerUrl.split(':')[0];
         const trackerPort = port;
-
-        // Construct a valid URL
         const fullUrl = `http://${hostname}:${trackerPort}`;
-
-        // console.log('Full URL:', fullUrl);
-        // console.log('Input Parameters:', connectionId, transactionID, infoHash, peerID, left);
-
         const announceRequest = createAnnounceRequest(connectionId, transactionID, infoHash, peerID, left);
-
-        // console.log("Announce Request Length:", announceRequest.length);
-
         try {
             socket.send(announceRequest, 0, announceRequest.length, trackerPort, hostname, (err) => {
                 if (err) {
                     console.error(`Couldn't send request to tracker ${fullUrl}:`, err.message);
                 }
+                console.log('Sent a request to: ',hostname)
             });
         } catch (err) {
             console.error('Error sending request:', err.message);
         }
     }
 };
-
-
-
-
-// Example usage
 torrentInfo().then(data => {
+    // console.log(data)
     const announceUrls = data.announceUrls;
-
     for (const tracker of announceUrls) {
         try {
-            // Parse the tracker URL
             const url = new URL(tracker);
             const port = url.port || 6881;
-
             sendConnectionRequest(url, port);
-
-            
         } catch (err) {
             console.error(`Error connecting to tracker ${tracker}:`, err.message);
         }
     }
     ConnectedTrackersList.once('trackerAdded', (key, value) => {
-                // console.log('Added Tracker:', ConnectedTrackersList);
                 const trackerList = ConnectedTrackersList.getTracker();
                 createPeerListConnection(trackerList, data.info_hash, data.peer_id, data.left);
             });
-
-
 }).finally(() => {
     console.log("Closing finally.");
-    // socket.close();
 });
-
