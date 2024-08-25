@@ -80,7 +80,6 @@ const ProccessedTorrentFile = async () => {
     let data = await fs.readFile('torrent_file.torrent')
     let jsonData = bencode.decode(data)
     let parsedTorrent = convertUint8ArrayToString(jsonData)
-    console.log("Parsed Data is: ",parsedTorrent)
     return parsedTorrent
 }
 const peerId = () => {
@@ -143,6 +142,7 @@ class TrackerData extends EventEmitter {
     constructor() {
         super()
         this.tracker = new Proxy({}, this.createHandler())
+        this.createHandler = this.createHandler.bind(this)
     }
     createHandler() {
         return {
@@ -181,8 +181,7 @@ const sendConnectionRequest = (trackerURL, port, retryCount = 0) => {
     });
 };
 socket.on('message', (response, rinfo) => {
-    // console.log(`Received message from ${rinfo.address}:${rinfo.port}`);
-    // console.log('Message:', response.toString('hex'));
+    
     const byteArray = Buffer.from(response, 'hex');
     const action = byteArray.readUInt32BE(0);
     if (action === 0) {
@@ -190,7 +189,6 @@ socket.on('message', (response, rinfo) => {
         const connectionIdHigh = byteArray.readUInt32BE(8);
         const connectionIdLow = byteArray.readUInt32BE(12);
         const responseConnectionId = (BigInt(connectionIdHigh) << 32n) | BigInt(connectionIdLow);
-        console.log(respTransactionId,"This is transcationID  ", byteArray, "this is Bytearray")
         if (PendingConnectionsRequests[respTransactionId]) {
             const tracker = PendingConnectionsRequests[respTransactionId];
             tracker.connectionID = responseConnectionId;
@@ -206,16 +204,12 @@ socket.on('message', (response, rinfo) => {
         const interval = response.readUInt32BE(8);
         const leechers = response.readUInt32BE(12);
         const seeders = response.readUInt32BE(16);
-        // console.log(`Announce response: interval=${interval}, leechers=${leechers}, seeders=${seeders}`);
         const peers = [];
         for (let i = 20; i < response.length; i += 6) {
             const ip = `${response[i]}.${response[i + 1]}.${response[i + 2]}.${response[i + 3]}`;
             const port = response.readUInt16BE(i + 4);
             peers.push({ ip, port });
         }
-        // console.log('Peers are:', peers);
-    }else {
-        // console.log(`Unknown action type: ${action}`);
     }
 });
 socket.on('error', (err) => {
@@ -247,7 +241,6 @@ const createPeerListConnection = (trackerList, infoHash, peerID, left) => {
     }
 };
 torrentInfo().then(data => {
-    // console.log(data)
     const announceUrls = data.announceUrls;
     for (const tracker of announceUrls) {
         try {
@@ -258,7 +251,7 @@ torrentInfo().then(data => {
             console.error(`Error connecting to tracker ${tracker}:`, err.message);
         }
     }
-    ConnectedTrackersList.once('trackerAdded', (key, value) => {
+    ConnectedTrackersList.on('trackerAdded', (key, value) => {
                 const trackerList = ConnectedTrackersList.getTracker();
                 createPeerListConnection(trackerList, data.info_hash, data.peer_id, data.left);
             });
